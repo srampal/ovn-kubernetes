@@ -21,33 +21,87 @@ if  ! ( command -v controller-gen > /dev/null ); then
   fi
 fi
 
+if  ! ( command -v deepcopy-gen > /dev/null ); then
+  echo "deepcopy-gen not found, installing k8s.io/code-generator"
+  olddir="${PWD}"
+  builddir="$(mktemp -d)"
+  cd "${builddir}"
+  GO111MODULE=on go get -u k8s.io/code-generator/cmd/deepcopy-gen
+  cd "${olddir}"
+  if [[ "${builddir}" == /tmp/* ]]; then #paranoia
+      rm -rf "${builddir}"
+  fi
+fi
+
+if  ! ( command -v client-gen > /dev/null ); then
+  echo "client-gen not found, installing k8s.io/code-generator"
+  olddir="${PWD}"
+  builddir="$(mktemp -d)"
+  cd "${builddir}"
+  GO111MODULE=on go get -u k8s.io/code-generator/cmd/client-gen
+  cd "${olddir}"
+  if [[ "${builddir}" == /tmp/* ]]; then #paranoia
+      rm -rf "${builddir}"
+  fi
+fi
+
+if  ! ( command -v informer-gen > /dev/null ); then
+  echo "client-gen not found, installing k8s.io/code-generator"
+  olddir="${PWD}"
+  builddir="$(mktemp -d)"
+  cd "${builddir}"
+  GO111MODULE=on go get -u k8s.io/code-generator/cmd/informer-gen
+  cd "${olddir}"
+  if [[ "${builddir}" == /tmp/* ]]; then #paranoia
+      rm -rf "${builddir}"
+  fi
+fi
+
+if  ! ( command -v lister-gen > /dev/null ); then
+  echo "client-gen not found, installing k8s.io/code-generator"
+  olddir="${PWD}"
+  builddir="$(mktemp -d)"
+  cd "${builddir}"
+  GO111MODULE=on go get -u k8s.io/code-generator/cmd/lister-gen
+  cd "${olddir}"
+  if [[ "${builddir}" == /tmp/* ]]; then #paranoia
+      rm -rf "${builddir}"
+  fi
+fi
+
+echo "Done installing k8s.io/code-generator"
+
 for crd in ${crds}; do
   echo "Generating deepcopy funcs for $crd"
-  deepcopy-gen \
+  GO111MODULE=on deepcopy-gen \
     --input-dirs github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/$crd/v1 \
     -O zz_generated.deepcopy \
+    --go-header-file /dev/null \
     --bounding-dirs github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd
 
 
   echo "Generating clientset for $crd"
-  client-gen \
+  GO111MODULE=on client-gen \
     --clientset-name "${CLIENTSET_NAME_VERSIONED:-versioned}" \
     --input-base "" \
     --input github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/$crd/v1 \
+    --go-header-file /dev/null \
     --output-package github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/$crd/v1/apis/clientset \
     "$@"
 
   echo "Generating listers for $crd"
-  lister-gen \
+  GO111MODULE=on lister-gen \
     --input-dirs github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/$crd/v1 \
+    --go-header-file /dev/null \
     --output-package github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/$crd/v1/apis/listers \
     "$@"
 
   echo "Generating informers for $crd"
-  informer-gen \
+  GO111MODULE=on informer-gen \
     --input-dirs github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/$crd/v1 \
     --versioned-clientset-package github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/$crd/v1/apis/clientset/versioned \
     --listers-package  github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/$crd/v1/apis/listers \
+    --go-header-file /dev/null \
     --output-package github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/$crd/v1/apis/informers \
     "$@"
 done
