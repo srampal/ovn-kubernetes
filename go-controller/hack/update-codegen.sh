@@ -69,8 +69,6 @@ if  ! ( command -v lister-gen > /dev/null ); then
   fi
 fi
 
-echo "Done installing k8s.io/code-generator"
-
 for crd in ${crds}; do
   echo "Generating deepcopy funcs for $crd"
   GO111MODULE=on deepcopy-gen \
