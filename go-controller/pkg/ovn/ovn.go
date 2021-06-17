@@ -294,6 +294,11 @@ func (oc *Controller) Run(wg *sync.WaitGroup, nodeName string) error {
 		return err
 	}
 
+	// CNP controller must be started early 
+	if err := oc.StartCnpController(wg, true); err != nil {
+		return err
+	}
+
 	// WatchNodes must be started next because it creates the node switch
 	// which most other watches depend on.
 	// https://github.com/ovn-org/ovn-kubernetes/pull/859
@@ -1066,4 +1071,12 @@ func (oc *Controller) StartServiceController(wg *sync.WaitGroup, runRepair bool)
 		}
 	}()
 	return nil
+}
+
+
+func (oc *Controller) StartCnpController(wg *sync.WaitGroup, runRepair bool) error {
+
+	klog.Infof("Starting OVN Cluster Network Policy Controller")
+
+        return nil
 }

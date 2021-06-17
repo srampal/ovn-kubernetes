@@ -13,8 +13,6 @@ import (
 // contrast with the NetworkPolicy resource which is namespace scoped and typically targeted for 
 // use by application developers/ devops teams. ClusterNetworkPolicy takes precedence over 
 // NetworkPolicy in the networking data plane
-
-
 type ClusterNetworkPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
