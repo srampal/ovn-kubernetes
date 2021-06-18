@@ -20,6 +20,7 @@ import (
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/kube"
 	addressset "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/address_set"
 	svccontroller "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/controller/services"
+	cnpcontroller "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/controller/clusternetworkpolicy"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/controller/unidling"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/ipallocator"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/subnetallocator"
@@ -173,6 +174,9 @@ type Controller struct {
 	// Controller used to handle services
 	svcController *svccontroller.Controller
 
+	// Controller used to handle CNPs (ClusterNetworkPolicies)
+	cnpController *cnpcontroller.Controller
+
 	egressFirewallDNS *EgressDNS
 
 	// Is ACL logging enabled while configuring meters?
@@ -294,7 +298,7 @@ func (oc *Controller) Run(wg *sync.WaitGroup, nodeName string) error {
 		return err
 	}
 
-	// CNP controller must be started early 
+	// Start the CNP (ClusterNetworkPolicy) controller 
 	if err := oc.StartCnpController(wg, true); err != nil {
 		return err
 	}
@@ -1073,10 +1077,29 @@ func (oc *Controller) StartServiceController(wg *sync.WaitGroup, runRepair bool)
 	return nil
 }
 
+func (oc *Controller) newCnpInformerFactory() (informers.SharedInformerFactory, error) {
+	// Create our own informers to start compartmentalizing the code
+
+	return informers.NewSharedInformerFactory(oc.client, 0), nil
+}
+
 
 func (oc *Controller) StartCnpController(wg *sync.WaitGroup, runRepair bool) error {
 
 	klog.Infof("Starting OVN Cluster Network Policy Controller")
 
-        return nil
+	cnpInformerFactory, err := oc.newCnpInformerFactory()
+	if err != nil {
+		return err
+	}
+
+        fmt.Printf("New CnpInformerFactory is of type %T \n", cnpInformerFactory)
+
+	oc.cnpController = cnpcontroller.NewController(
+		oc.client,
+	)
+
+        fmt.Printf("New CnpController is of type %T \n", oc.cnpController)
+
+        return nil 
 }
