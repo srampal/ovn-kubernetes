@@ -1119,8 +1119,9 @@ func (oc *Controller) StartServiceController(wg *sync.WaitGroup, runRepair bool)
 func (oc *Controller) newCnpInformerFactory() (cnpInformers.SharedInformerFactory, error) {
 
         /* Assert ock as pointer to okube.Kube */
-        ock := (oc.kube).(*okube.Kube)
-        return cnpInformers.NewSharedInformerFactory((*ock).CnpClient, 0), nil
+        ock := (oc.kube).(* okube.Kube)
+
+        return cnpInformers.NewSharedInformerFactory((ock).CnpClient, 0), nil
 }
 
 
@@ -1130,10 +1131,11 @@ func (oc *Controller) StartCnpController(wg *sync.WaitGroup, runRepair bool) err
 
 	cnpInformerFactory, err := oc.newCnpInformerFactory()
 	if err != nil {
+		klog.Errorf("Error from newCnpInformerFactory() : %v", err)
 		return err
 	}
 
-        fmt.Printf("New CnpInformerFactory is of type %T \n", cnpInformerFactory)
+        klog.Infof("New CnpInformerFactory is of type %T value %+v \n", cnpInformerFactory, cnpInformerFactory)
 
 	oc.cnpController = cnpcontroller.NewController(
 		oc.kube,
@@ -1141,7 +1143,20 @@ func (oc *Controller) StartCnpController(wg *sync.WaitGroup, runRepair bool) err
                 cnpInformerFactory,
 	)
 
-        fmt.Printf("New CnpController is of type %T \n", oc.cnpController)
+	cnpInformerFactory.Start(oc.stopChan)
+
+        klog.Infof("CnpInformerFactory started channel ... \n")
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// use 1 worker for now  (unlike most of the kubernetes controllers in the
+		// kubernetes controller-manager)
+		err := oc.cnpController.Run(1, oc.stopChan, false)
+		if err != nil {
+			klog.Errorf("Error running OVN Kubernetes CNP controller: %v", err)
+		}
+	}()
 
         return nil 
 }
