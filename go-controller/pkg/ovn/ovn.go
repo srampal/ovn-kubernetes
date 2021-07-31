@@ -17,10 +17,11 @@ import (
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/config"
 	egressipv1 "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/egressip/v1"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/factory"
-	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/kube"
+	okube "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/kube"
 	addressset "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/address_set"
 	svccontroller "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/controller/services"
 	cnpcontroller "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/controller/clusternetworkpolicy"
+        cnpInformers "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/clusternetworkpolicy/v1/apis/informers/externalversions"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/controller/unidling"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/ipallocator"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/subnetallocator"
@@ -109,7 +110,7 @@ type namespaceInfo struct {
 // and reacting upon the watched resources (e.g. pods, endpoints)
 type Controller struct {
 	client                clientset.Interface
-	kube                  kube.Interface
+	kube                  okube.Interface
 	watchFactory          *factory.WatchFactory
 	egressFirewallHandler *factory.Handler
 	stopChan              <-chan struct{}
@@ -244,10 +245,11 @@ func NewOvnController(ovnClient *util.OVNClientset, wf *factory.WatchFactory,
 	}
 	return &Controller{
 		client: ovnClient.KubeClient,
-		kube: &kube.Kube{
+		kube: &okube.Kube{
 			KClient:              ovnClient.KubeClient,
 			EIPClient:            ovnClient.EgressIPClient,
 			EgressFirewallClient: ovnClient.EgressFirewallClient,
+                        CnpClient:            ovnClient.CnpClient,
 		},
 		watchFactory:              wf,
 		stopChan:                  stopChan,
@@ -1113,10 +1115,12 @@ func (oc *Controller) StartServiceController(wg *sync.WaitGroup, runRepair bool)
 	return nil
 }
 
-func (oc *Controller) newCnpInformerFactory() (informers.SharedInformerFactory, error) {
-	// Create our own informers to start compartmentalizing the code
 
-	return informers.NewSharedInformerFactory(oc.client, 0), nil
+func (oc *Controller) newCnpInformerFactory() (cnpInformers.SharedInformerFactory, error) {
+
+        /* Assert ock as pointer to okube.Kube */
+        ock := (oc.kube).(*okube.Kube)
+        return cnpInformers.NewSharedInformerFactory((*ock).CnpClient, 0), nil
 }
 
 
@@ -1132,7 +1136,9 @@ func (oc *Controller) StartCnpController(wg *sync.WaitGroup, runRepair bool) err
         fmt.Printf("New CnpInformerFactory is of type %T \n", cnpInformerFactory)
 
 	oc.cnpController = cnpcontroller.NewController(
-		oc.client,
+		oc.kube,
+                oc.client,
+                cnpInformerFactory,
 	)
 
         fmt.Printf("New CnpController is of type %T \n", oc.cnpController)

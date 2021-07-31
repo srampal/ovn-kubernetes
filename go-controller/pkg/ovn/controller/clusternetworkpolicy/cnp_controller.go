@@ -2,12 +2,21 @@ package clusternetworkpolicy
 
 import (
 	"time"
-	clientset "k8s.io/client-go/kubernetes"
+	"fmt"
 	"k8s.io/klog/v2"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/client-go/tools/record"
+	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
+	k8sclientset "k8s.io/client-go/kubernetes"
+        okube "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/kube"
+        cnpInformers "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/clusternetworkpolicy/v1/apis/informers/externalversions"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 /***
-	"fmt"
+        cnpclientset "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/clusternetworkpolicy/v1/apis/clientset/versioned"
+	"k8s.io/client-go/kubernetes/scheme"
+	v1 "k8s.io/api/core/v1"
+
 
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/config"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/metrics"
@@ -15,22 +24,17 @@ import (
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
 	"github.com/pkg/errors"
 
-	v1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	discoveryinformers "k8s.io/client-go/informers/discovery/v1beta1"
-	"k8s.io/client-go/kubernetes/scheme"
-	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	discoverylisters "k8s.io/client-go/listers/discovery/v1beta1"
 
-	"k8s.io/client-go/tools/record"
 
 	utilnet "k8s.io/utils/net"
 ***/
@@ -49,7 +53,13 @@ const (
 
 // Main Cnp Controller struct  
 type Controller struct {
-	client           clientset.Interface
+/**
+        // clientset for k8s core api groups/ resources
+	k8sClient           clientset.Interface
+
+        // clientset for cnp resources
+        cnpClient           cnpclientset.Interface
+**/
 
 	// cnpSynced returns true if the shared informer has been synced at least once.
 	cnpSynced cache.InformerSynced
@@ -62,26 +72,55 @@ type Controller struct {
 }
 
 // NewController returns a new *Controller.
-func NewController(client clientset.Interface,
-) *Controller {
+func NewController(ockube okube.Interface, 
+                   k8sclient k8sclientset.Interface,
+                   cnpInformerFactory cnpInformers.SharedInformerFactory,
+                  ) *Controller {
 
 	klog.V(4).Info("Creating new Cnp controller")
 
-/***  May need to come back to add this broadcaster thingy TODO
+        if ockube == nil {
+                fmt.Errorf("Error input starting new cnp controller ... ")
+                return nil
+        }
+
 	broadcaster := record.NewBroadcaster()
 	broadcaster.StartStructuredLogging(0)
-	broadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: client.CoreV1().Events("")})
-	recorder := broadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: controllerName})
-***/
+	broadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: k8sclient.CoreV1().Events("")})
+	// recorder := broadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: controllerName})
 
 	c := &Controller{
-		client:           client,
 		queue:            workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), controllerName),
 		workerLoopPeriod: time.Second,
 	}
+
+        // Handlers for CNP CRUD events
+
+        klog.Info("Setting up event handlers for CNPs")
+
+        cnpInformerFactory.K8s().V1().ClusterNetworkPolicies().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+                AddFunc:    c.onCnpAdd,
+                UpdateFunc: nil,
+                DeleteFunc: nil,
+        })
 
 	return c
 
 } // NewController()
 
+
+// handlers
+
+// onCnpAdd queues the Cnp creation for processing.
+func (c *Controller) onCnpAdd(obj interface{}) {
+	klog.Infof("Adding Cluster Network Policy")
+	key, err := cache.MetaNamespaceKeyFunc(obj)
+	if err != nil {
+		fmt.Errorf("couldn't get key for object %+v: %v", obj, err)
+		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %+v: %v", obj, err))
+		return
+	}
+	klog.Infof("Queueing up Cluster Network Policy  %s", key)
+	c.queue.Add(key)
+}
 
